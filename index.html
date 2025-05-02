@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aplikasi Pembukuan Sederhana</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+    h1 {
+      color: #333;
+    }
+    input, button {
+      padding: 8px;
+      margin: 5px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: white;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ccc;
+      text-align: left;
+    }
+    tfoot {
+      font-weight: bold;
+      background-color: #eee;
+    }
+  </style>
+</head>
+<body>
+  <h1>Pembukuan Barang</h1>
+  <input type="text" id="nama" placeholder="Nama Barang">
+  <input type="text" id="harga" placeholder="Harga">
+  <input type="number" id="jumlah" placeholder="Jumlah">
+  <button onclick="tambahBarang()">Tambah</button>
+  <button onclick="exportExcel()">Export ke Excel</button>
+  <button onclick="exportPDF()">Export ke PDF</button>
+
+  <table id="tabel">
+    <thead>
+      <tr>
+        <th>Nama Barang</th>
+        <th>Harga</th>
+        <th>Jumlah</th>
+        <th>Total</th>
+        <th>Aksi</th>
+      </tr>
+    </thead>
+    <tbody id="isiTabel"></tbody>
+    <tfoot>
+      <tr>
+        <td colspan="4">Total Keseluruhan</td>
+        <td id="totalKeseluruhan">0</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <script>
+    let totalKeseluruhan = 0;
+    let editIndex = -1;
+
+    function formatRibuan(angka) {
+      return angka.toLocaleString('id-ID');
+    }
+
+    window.onload = function () {
+      const data = localStorage.getItem("pembukuanData");
+      if (data) {
+        const items = JSON.parse(data);
+        items.forEach(item => tambahBarangDariStorage(item));
+      }
+    };
+
+    function simpanKeStorage() {
+      const rows = document.querySelectorAll("#isiTabel tr");
+      const items = Array.from(rows).map(row => {
+        return {
+          nama: row.children[0].innerText,
+          harga: parseInt(row.children[1].innerText.replace(/\./g, '')),
+          jumlah: parseInt(row.children[2].innerText.replace(/\./g, ''))
+        };
+      });
+      localStorage.setItem("pembukuanData", JSON.stringify(items));
+    }
+
+    function tambahBarang() {
+      const nama = document.getElementById("nama").value;
+      const harga = parseInt(document.getElementById("harga").value.replace(/\./g, ''));
+      const jumlah = parseInt(document.getElementById("jumlah").value);
+
+      if (!nama || isNaN(harga) || isNaN(jumlah)) {
+        alert("Mohon isi semua data dengan benar.");
+        return;
+      }
+
+      const total = harga * jumlah;
+
+      if (editIndex === -1) {
+        totalKeseluruhan += total;
+        const baris = document.createElement("tr");
+        baris.innerHTML = `
+          <td>${nama}</td>
+          <td>${formatRibuan(harga)}</td>
+          <td>${formatRibuan(jumlah)}</td>
+          <td>${formatRibuan(total)}</td>
+          <td>
+            <button onclick="editBarang(this)">Edit</button>
+            <button onclick="hapusBarang(this)">Hapus</button>
+          </td>
+        `;
+        document.getElementById("isiTabel").appendChild(baris);
+      } else {
+        const rows = document.querySelectorAll("#isiTabel tr");
+        const row = rows[editIndex];
+        const oldTotal = parseInt(row.children[3].innerText.replace(/\./g, ''));
+        totalKeseluruhan = totalKeseluruhan - oldTotal + total;
+
+        row.children[0].innerText = nama;
+        row.children[1].innerText = formatRibuan(harga);
+        row.children[2].innerText = formatRibuan(jumlah);
+        row.children[3].innerText = formatRibuan(total);
+        editIndex = -1;
+      }
+
+      document.getElementById("totalKeseluruhan").innerText = formatRibuan(totalKeseluruhan);
+      document.getElementById("nama").value = "";
+      document.getElementById("harga").value = "";
+      document.getElementById("jumlah").value = "";
+
+      simpanKeStorage();
+    }
+
+    function tambahBarangDariStorage(item) {
+      const total = item.harga * item.jumlah;
+      totalKeseluruhan += total;
+
+      const baris = document.createElement("tr");
+      baris.innerHTML = `
+        <td>${item.nama}</td>
+        <td>${formatRibuan(item.harga)}</td>
+        <td>${formatRibuan(item.jumlah)}</td>
+        <td>${formatRibuan(total)}</td>
+        <td>
+          <button onclick="editBarang(this)">Edit</button>
+          <button onclick="hapusBarang(this)">Hapus</button>
+        </td>
+      `;
+      document.getElementById("isiTabel").appendChild(baris);
+      document.getElementById("totalKeseluruhan").innerText = formatRibuan(totalKeseluruhan);
+    }
+
+    function editBarang(button) {
+      const row = button.parentElement.parentElement;
+      const rows = Array.from(document.querySelectorAll("#isiTabel tr"));
+      editIndex = rows.indexOf(row);
+
+      document.getElementById("nama").value = row.children[0].innerText;
+      document.getElementById("harga").value = row.children[1].innerText.replace(/\./g, '');
+      document.getElementById("jumlah").value = row.children[2].innerText.replace(/\./g, '');
+    }
+
+    function hapusBarang(button) {
+      const row = button.parentElement.parentElement;
+      const total = parseInt(row.children[3].innerText.replace(/\./g, ''));
+      totalKeseluruhan -= total;
+      document.getElementById("totalKeseluruhan").innerText = formatRibuan(totalKeseluruhan);
+      row.remove();
+      editIndex = -1;
+      simpanKeStorage();
+    }
+
+    function exportExcel() {
+      const table = document.getElementById("tabel");
+      const wb = XLSX.utils.table_to_book(table, { sheet: "Pembukuan" });
+      XLSX.writeFile(wb, "pembukuan_barang.xlsx");
+    }
+
+    function exportPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      html2canvas(document.querySelector("#tabel")).then(canvas => {
+        const imgData = canvas.toDataURL("image/png");
+        const imgProps = doc.getImageProperties(imgData);
+        const pdfWidth = doc.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        doc.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+        doc.save("pembukuan_barang.pdf");
+      });
+    }
+
+    document.getElementById("harga").addEventListener("input", function(e) {
+      let value = e.target.value.replace(/\D/g, "");
+      e.target.value = formatRibuan(Number(value));
+    });
+  </script>
+</body>
+</html>
